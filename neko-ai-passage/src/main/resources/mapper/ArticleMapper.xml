@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wenxi.nekoaipassage.mapper.ArticleMapper">
+
+    <resultMap id="BaseResultMap" type="com.wenxi.nekoaipassage.model.entity.Article">
+        <id property="id" column="id" jdbcType="BIGINT"/>
+        <result property="taskId" column="taskId" jdbcType="VARCHAR"/>
+        <result property="userId" column="userId" jdbcType="BIGINT"/>
+        <result property="topic" column="topic" jdbcType="VARCHAR"/>
+        <result property="mainTitle" column="mainTitle" jdbcType="VARCHAR"/>
+        <result property="subTitle" column="subTitle" jdbcType="VARCHAR"/>
+        <result property="outline" column="outline" jdbcType="OTHER"/>
+        <result property="content" column="content" jdbcType="VARCHAR"/>
+        <result property="fullContent" column="fullContent" jdbcType="VARCHAR"/>
+        <result property="coverImage" column="coverImage" jdbcType="VARCHAR"/>
+        <result property="images" column="images" jdbcType="OTHER"/>
+        <result property="status" column="status" jdbcType="VARCHAR"/>
+        <result property="errorMessage" column="errorMessage" jdbcType="VARCHAR"/>
+        <result property="createTime" column="createTime" jdbcType="TIMESTAMP"/>
+        <result property="completedTime" column="completedTime" jdbcType="TIMESTAMP"/>
+        <result property="updateTime" column="updateTime" jdbcType="TIMESTAMP"/>
+        <result property="isDelete" column="isDelete" jdbcType="TINYINT"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id
+        ,taskId,userId,
+        topic,mainTitle,subTitle,
+        outline,content,fullContent,
+        coverImage,images,status,
+        errorMessage,createTime,completedTime,
+        updateTime,isDelete
+    </sql>
+</mapper>

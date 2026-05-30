@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: neko-ai-passage
+  profiles:
+    active: local
+
+  # session 配置
+  session:
+    store-type: redis
+    # session 30 天过期
+    timeout: 2592000
+
+server:
+  port: 8123
+  servlet:
+    context-path: /api
+    # cookie 30 天过期
+    session:
+      cookie:
+        max-age: 2592000
+
+mybatis-flex:
+  configuration:
+    map-underscore-to-camel-case: false
+
+# springdoc-openapi 配置
+springdoc:
+  group-configs:
+    - group: 'default'
+      paths-to-match: '/**'
+      packages-to-scan: com.wenxi.nekoaipassage.controller
+# knife4j 接口文档配置
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
