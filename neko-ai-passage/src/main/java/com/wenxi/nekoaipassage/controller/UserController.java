@@ -2,12 +2,12 @@ package com.wenxi.nekoaipassage.controller;
 
 import cn.hutool.core.bean.BeanUtil;
 import com.mybatisflex.core.paginate.Page;
-import com.wenxi.neko_ai_agent.exception.BusinessException;
 import com.wenxi.nekoaipassage.annotation.AuthCheck;
 import com.wenxi.nekoaipassage.common.BaseResponse;
 import com.wenxi.nekoaipassage.common.DeleteRequest;
 import com.wenxi.nekoaipassage.common.ResultUtils;
 import com.wenxi.nekoaipassage.constant.UserConstant;
+import com.wenxi.nekoaipassage.exception.BusinessException;
 import com.wenxi.nekoaipassage.exception.ErrorCode;
 import com.wenxi.nekoaipassage.exception.ThrowUtils;
 import com.wenxi.nekoaipassage.model.dto.user.*;

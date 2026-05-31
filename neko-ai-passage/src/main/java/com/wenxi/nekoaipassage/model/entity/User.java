@@ -65,6 +65,11 @@ public class User implements Serializable {
     private String userRole;
 
     /**
+     * 剩余配额
+     */
+    private Integer quota;
+
+    /**
      * 编辑时间
      */
     private Date editTime;

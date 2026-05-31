@@ -1,8 +1,9 @@
 package com.wenxi.nekoaipassage.aop;
 
-import com.wenxi.neko_ai_agent.exception.BusinessException;
+
 import com.wenxi.nekoaipassage.annotation.AuthCheck;
 import com.wenxi.nekoaipassage.enums.UserRoleEnum;
+import com.wenxi.nekoaipassage.exception.BusinessException;
 import com.wenxi.nekoaipassage.exception.ErrorCode;
 import com.wenxi.nekoaipassage.model.entity.User;
 import com.wenxi.nekoaipassage.service.UserService;
@@ -38,7 +39,7 @@ public class AuthInterceptor {
         // 必须有这个权限，才可提供给
         UserRoleEnum userRoleEnum = UserRoleEnum.getEnumByValue(loginUser.getUserRole());
         if (userRoleEnum == null) {
-            throw new com.wenxi.neko_ai_agent.exception.BusinessException(ErrorCode.NO_AUTH_ERROR);
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
         }
         // 要求必须要有管理员权限，但当前用户没有
         if (UserRoleEnum.ADMIN.equals(mustRoleEnum) && !UserRoleEnum.ADMIN.equals(userRoleEnum)) {

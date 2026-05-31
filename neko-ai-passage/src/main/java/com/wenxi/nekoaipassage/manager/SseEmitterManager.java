@@ -9,6 +9,9 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * SSE Emitter 管理器
+ */
 @Component
 @Slf4j
 public class SseEmitterManager {
@@ -21,7 +24,12 @@ public class SseEmitterManager {
     /**
      * 超时时间 ： 30分钟
      */
-    private static final long TIMEOUT = 30 * 60 * 1000;
+    private static final long TIMEOUT = 30 * 60 * 1000L;
+
+    /**
+     * 重连时间： 3秒
+     */
+    private static final long RECONNECT_TIME = 3000L;
 
     /**
      * 创建 SseEmitter 并存入 emitterMap 集中管理
@@ -77,7 +85,7 @@ public class SseEmitterManager {
         try {
             emitter.send(SseEmitter.event()
                     .data(message)
-                    .reconnectTime(3000)
+                    .reconnectTime(RECONNECT_TIME)
             );
             log.debug("SSE 消息发送成功，taskId = {}, message = {}", taskId, message);
         } catch (IOException e) {

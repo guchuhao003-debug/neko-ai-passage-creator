@@ -1,6 +1,6 @@
 package com.wenxi.nekoaipassage.exception;
 
-import com.wenxi.neko_ai_agent.exception.BusinessException;
+
 import com.wenxi.nekoaipassage.common.BaseResponse;
 import com.wenxi.nekoaipassage.common.ResultUtils;
 import io.swagger.v3.oas.annotations.Hidden;

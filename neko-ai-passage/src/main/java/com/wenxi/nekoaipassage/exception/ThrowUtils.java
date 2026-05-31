@@ -24,7 +24,7 @@ public class ThrowUtils {
      * @param errorCode 错误码
      */
     public static void throwIf(boolean condition, ErrorCode errorCode) {
-        throwIf(condition, new com.wenxi.neko_ai_agent.exception.BusinessException(errorCode));
+        throwIf(condition, new BusinessException(errorCode));
     }
 
     /**
@@ -35,6 +35,6 @@ public class ThrowUtils {
      * @param message   错误信息
      */
     public static void throwIf(boolean condition, ErrorCode errorCode, String message) {
-        throwIf(condition, new com.wenxi.neko_ai_agent.exception.BusinessException(errorCode, message));
+        throwIf(condition, new BusinessException(errorCode, message));
     }
 }

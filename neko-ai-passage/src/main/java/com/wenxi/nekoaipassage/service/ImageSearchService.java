@@ -1,7 +1,12 @@
 package com.wenxi.nekoaipassage.service;
 
 
-public interface PexelsService {
+import com.wenxi.nekoaipassage.enums.ImageMethodEnum;
+
+/**
+ * 图片检索服务
+ */
+public interface ImageSearchService {
 
     /**
      * 根据关键字检索图片
@@ -10,6 +15,12 @@ public interface PexelsService {
      * @return 图片 URL
      */
     String searchImage(String keywords);
+
+    /**
+     * 获取图片检索方式
+     * @return
+     */
+    ImageMethodEnum getMethod();
 
     /**
      * 降级方案：使用 picsum 随机图片

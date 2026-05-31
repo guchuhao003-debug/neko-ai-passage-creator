@@ -1,7 +1,6 @@
-package com.wenxi.neko_ai_agent.exception;
+package com.wenxi.nekoaipassage.exception;
 
 
-import com.wenxi.nekoaipassage.exception.ErrorCode;
 import lombok.Getter;
 
 /**

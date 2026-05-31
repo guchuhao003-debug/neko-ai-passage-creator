@@ -1,20 +1,20 @@
 package com.wenxi.nekoaipassage.service.impl;
 
-import com.google.gson.Gson;
-import com.mybatisflex.core.query.QueryWrapper;
+import com.wenxi.nekoaipassage.enums.ArticleStatusEnum;
+import com.wenxi.nekoaipassage.enums.SseMessageTypeEnum;
 import com.wenxi.nekoaipassage.manager.SseEmitterManager;
-import com.wenxi.nekoaipassage.mapper.ArticleMapper;
 import com.wenxi.nekoaipassage.model.dto.article.ArticleState;
-import com.wenxi.nekoaipassage.model.entity.Article;
 import com.wenxi.nekoaipassage.service.ArticleAgentService;
 import com.wenxi.nekoaipassage.service.ArticleAsyncService;
+import com.wenxi.nekoaipassage.service.ArticleService;
+import com.wenxi.nekoaipassage.utils.GsonUtils;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.Map;
 
 /**
  * 文章异步任务服务
@@ -30,9 +30,8 @@ public class ArticleAsyncServiceImpl implements ArticleAsyncService {
     private SseEmitterManager sseEmitterManager;
 
     @Resource
-    private ArticleMapper articleMapper;
+    private ArticleService articleService;
 
-    private static final Gson GSON = new Gson();
 
     /**
      * 异步执行文章生成
@@ -47,7 +46,7 @@ public class ArticleAsyncServiceImpl implements ArticleAsyncService {
 
         try {
             // 更新状态为处理中
-            updateArticleStatus(taskId,"PROCESSING", null);
+            articleService.updateArticleStatus(taskId, ArticleStatusEnum.PROCESSING, null);
 
             // 创建状态对象
             ArticleState state = new ArticleState();
@@ -55,33 +54,28 @@ public class ArticleAsyncServiceImpl implements ArticleAsyncService {
             state.setTopic(topic);
 
             // 执行智能体编排，并通过 SSE 推送进度
-            articleAgentService.executeArticleGeneration(state,message -> {
-                handleAgentMessage(taskId,message,state);
+            articleAgentService.executeArticleGeneration(state, message -> {
+                handleAgentMessage(taskId, message, state);
             });
             // 保存完整文章到数据库
-            saveArticleToDatabase(taskId, state);
+            articleService.saveArticleContent(taskId, state);
 
             // 更新状态为已完成
-            updateArticleStatus(taskId,"COMPLETED", null);
+            articleService.updateArticleStatus(taskId,ArticleStatusEnum.COMPLETED,  null);
 
             // 推送完成消息
-            HashMap<String, Object> completeData = new HashMap<>();
-            completeData.put("type", "ALL_COMPLETE");
-            completeData.put("taskId", taskId);
-            sseEmitterManager.send(taskId, GSON.toJson(completeData));
+            sendSseMessage(taskId, SseMessageTypeEnum.ALL_COMPLETE, Map.of("taskId", taskId));
 
             // 完成 SSE 连接
             sseEmitterManager.complete(taskId);
             log.info("异步任务已完成，taskId = {}", taskId);
+
         } catch (Exception e) {
             log.error("异步任务失败, taskId = {}", taskId, e);
             // 更新状态为失败
-            updateArticleStatus(taskId,"FAILED", e.getMessage());
+            articleService.updateArticleStatus(taskId,ArticleStatusEnum.FAILED, e.getMessage());
             // 推送失败消息
-            HashMap<String, Object> errorData = new HashMap<>();
-            errorData.put("type","ERROR");
-            errorData.put("message", e.getMessage());
-            sseEmitterManager.send(taskId, GSON.toJson(errorData));
+            sendSseMessage(taskId, SseMessageTypeEnum.ERROR, Map.of("message", e.getMessage()));
             // 完成 SSE 连接
             sseEmitterManager.complete(taskId);
         }
@@ -95,93 +89,109 @@ public class ArticleAsyncServiceImpl implements ArticleAsyncService {
      * @param state
      */
     private void handleAgentMessage(String taskId, String message, ArticleState state) {
-        HashMap<String, Object> data = new HashMap<>();
-
-        if (message.equals("AGENT1_COMPLETE")) {
-            // 智能体 1 完成
-            data.put("type", "AGENT1_COMPLETE");
-            data.put("title", state.getTitle());
-        } else if (message.equals("AGENT2_COMPLETE")) {
-            // 智能体 2 完成
-            data.put("type", "AGENT2_COMPLETE");
-            data.put("outline", state.getOutline().getSections());
-        } else if (message.startsWith("AGENT3_STREAMING")) {
-            // 智能体 3 流式输出
-            String chunk = message.substring("AGENT3_STREAMING:".length());
-            data.put("type", "AGENT3_STREAMING");
-            data.put("content", chunk);
-        } else if (message.equals("AGENT4_COMPLETE")) {
-            // 智能体 4 完成
-            data.put("type", "AGENT4_COMPLETE");
-            data.put("imageRequirements", state.getImageRequirements());
-        } else if (message.startsWith("IMAGE_COMPLETE:")) {
-            // 单张配图完成
-            String imageJson = message.substring("IMAGE_COMPLETE:".length());
-            data.put("type", "IMAGE_COMPLETE");
-            data.put("image", GSON.fromJson(imageJson, ArticleState.ImageResult.class));
-        } else if (message.equals("AGENT5_COMPLETE")) {
-            // 智能体 5 完成
-            data.put("type", "AGENT5_COMPLETE");
-            data.put("images", state.getImages());
-        } else {
-            return;
-        }
-
-        // 发送 SSE 消息
-        sseEmitterManager.send(taskId, GSON.toJson(data));
+        buildMessageData(message, state);
 
     }
 
     /**
-     * 保存文章到数据库
-     *
-     * @param taskId
+     * 构建消息数据
+     * @param message
      * @param state
+     * @return
      */
-    private void saveArticleToDatabase(String taskId, ArticleState state) {
-        // 根据 taskId 获取文章记录
-        Article article = articleMapper.selectOneByQuery(
-                QueryWrapper.create().eq("taskId", taskId)
-        );
-        // 校验文章记录是否存在
-        if (article == null) {
-            log.error("文章记录不存在，taskId = {}", taskId);
-            return;
+    private Map<String, Object> buildMessageData(String message, ArticleState state) {
+        // 处理流式消息 （带冒号分隔符）
+        String streamingPrefix2 = SseMessageTypeEnum.AGENT2_STREAMING.getStreamingPrefix();
+        String streamingPrefix3 = SseMessageTypeEnum.AGENT3_STREAMING.getStreamingPrefix();
+        String imageCompletePrefix = SseMessageTypeEnum.IMAGE_COMPLETE.getStreamingPrefix();
+
+        if (message.startsWith(streamingPrefix2)) {
+            return buildStreamingData(SseMessageTypeEnum.AGENT2_STREAMING, message.substring(streamingPrefix2.length()));
         }
 
+        if (message.startsWith(streamingPrefix3)) {
+            return buildStreamingData(SseMessageTypeEnum.AGENT3_STREAMING, message.substring(streamingPrefix3.length()));
+        }
 
-        article.setMainTitle(state.getTitle().getMainTitle());
-        article.setSubTitle(state.getTitle().getSubTitle());
-        article.setOutline(GSON.toJson(state.getOutline().getSections()));
-        article.setContent(state.getContent());
-        article.setImages(GSON.toJson(state.getImages()));
-        article.setCompletedTime(LocalDateTime.now());
+        if (message.startsWith(imageCompletePrefix)) {
+            String imageJson = message.substring(imageCompletePrefix.length());
+            return buildImageCompleteData(imageJson);
+        }
 
-        articleMapper.update(article);
-        log.info("文章保存成功，taskId = {}", taskId);
+        // 处理完成消息（枚举值）
+        return buildCompleteMessageData(message, state);
     }
 
     /**
-     * 更新文章状态
-     * @param taskId
-     * @param status
-     * @param errorMessage
+     * 构建流式输出数据
+     * @param messageType
+     * @param content
+     * @return
      */
-    private void updateArticleStatus(String taskId, String status, String errorMessage) {
-        // 根据 taskId 获取文章记录
-        Article article = articleMapper.selectOneByQuery(
-                QueryWrapper.create().eq("taskId", taskId)
-        );
-        // 校验文章记录是否存在
-        if (article == null) {
-            log.error("文章记录不存在，taskId = {}", taskId);
-            return;
-        }
-        article.setStatus(status);
-        article.setErrorMessage(errorMessage);
-        articleMapper.update(article);
-        log.info("文章状态已更新，taskId = {}, status = {}", taskId, status);
-
+    private Map<String, Object> buildStreamingData(SseMessageTypeEnum messageType, String content) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("type",messageType.getValue());
+        data.put("content", content);
+        return data;
     }
+
+    /**
+     * 构建图片完成数据
+     * @param imageJson
+     * @return
+     */
+    private Map<String, Object> buildImageCompleteData(String imageJson) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("type", SseMessageTypeEnum.IMAGE_COMPLETE.getValue());
+        data.put("image", GsonUtils.fromJson(imageJson, ArticleState.ImageResult.class));
+        return data;
+    }
+
+    /**
+     * 构建完成消息数据
+     * @param message
+     * @param state
+     * @return
+     */
+    private Map<String, Object> buildCompleteMessageData(String message, ArticleState state) {
+        Map<String, Object> data = new HashMap<>();
+
+        // 使用枚举值匹配
+        if (SseMessageTypeEnum.AGENT1_COMPLETE.getValue().equals(message)) {
+            data.put("type", SseMessageTypeEnum.AGENT1_COMPLETE.getValue());
+            data.put("title", state.getTitle());
+        } else if (SseMessageTypeEnum.AGENT2_COMPLETE.getValue().equals(message)) {
+            data.put("type", SseMessageTypeEnum.AGENT2_COMPLETE.getValue());
+            data.put("outline", state.getOutline().getSections());
+        } else if (SseMessageTypeEnum.AGENT3_COMPLETE.getValue().equals(message)) {
+            data.put("type", SseMessageTypeEnum.AGENT3_COMPLETE.getValue());
+        } else if (SseMessageTypeEnum.AGENT4_COMPLETE.getValue().equals(message)) {
+            data.put("type", SseMessageTypeEnum.AGENT4_COMPLETE.getValue());
+            data.put("imageRequirements", state.getImageRequirements());
+        } else if (SseMessageTypeEnum.AGENT5_COMPLETE.getValue().equals(message)) {
+            data.put("type", SseMessageTypeEnum.AGENT5_COMPLETE.getValue());
+            data.put("images", state.getImages());
+        } else if (SseMessageTypeEnum.MERGE_COMPLETE.getValue().equals(message)) {
+            data.put("type", SseMessageTypeEnum.MERGE_COMPLETE.getValue());
+            data.put("fullContent", state.getFullContent());
+        } else {
+            return null;
+        }
+        return data;
+    }
+
+    /**
+     * 发送 SSE 消息
+     * @param taskId
+     * @param typeEnum
+     * @param additionalData
+     */
+    private void sendSseMessage(String taskId, SseMessageTypeEnum typeEnum, Map<String, Object> additionalData) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("type", typeEnum.getValue());
+        data.putAll(additionalData);
+        sseEmitterManager.send(taskId, GsonUtils.toJson(data));
+    }
+
 
 }
