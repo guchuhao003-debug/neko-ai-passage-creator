@@ -9,7 +9,7 @@ import com.wenxi.nekoaipassage.enums.SseMessageTypeEnum;
 import com.wenxi.nekoaipassage.model.dto.article.ArticleState;
 import com.wenxi.nekoaipassage.service.ArticleAgentService;
 import com.wenxi.nekoaipassage.service.CosService;
-import com.wenxi.nekoaipassage.service.ImageSearchService;
+import com.wenxi.nekoaipassage.service.ImageServiceStrategy;
 import com.wenxi.nekoaipassage.utils.GsonUtils;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -34,7 +34,7 @@ public class ArticleAgentServiceImpl implements ArticleAgentService {
     private DashScopeChatModel dashScopeChatModel;
 
     @Resource
-    private ImageSearchService imageSearchService;
+    private ImageServiceStrategy imageServiceStrategy;
 
     @Resource
     private CosService cosService;
@@ -191,19 +191,25 @@ public class ArticleAgentServiceImpl implements ArticleAgentService {
         // 遍历每个配图需求
         // 从状态中获取需求列表（智能体 4 生成）。
         for (ArticleState.ImageRequirement requirement : state.getImageRequirements()) {
-            log.info("智能体 5 ： 开始检索配图, position = {}, keywords = {}",
-                    requirement.getPosition(), requirement.getKeywords());
+            String imageSource = requirement.getImageSource();
+            log.info("智能体 5 ： 开始获取配图, position = {}, imageSource = {}, keywords = {}",
+                    requirement.getPosition(), imageSource, requirement.getKeywords());
 
-            // 调用 Pexels API 检索图片
-            String imageUrl = imageSearchService.searchImage(requirement.getKeywords());
+            // 使用策略模式根据 imageSource 来选择对应的图片服务
+            ImageServiceStrategy.ImageResult result = imageServiceStrategy.getImage(
+                    imageSource,
+                    requirement.getKeywords(),
+                    requirement.getPrompt());
+
+            // 从图片获取结果中获取 URL
+            String imageUrl = result.getUrl();
+            ImageMethodEnum method = result.getMethod();
 
             // 降级策略
-            // 标记点，用于区分是 Pexels API 还是 PICSUM API 降级策略
-            ImageMethodEnum method = imageSearchService.getMethod();
-            if (imageUrl == null) {
-                imageUrl = imageSearchService.getFallbackImage(requirement.getPosition());
+            if (!result.isSuccess()) {
+                imageUrl = imageServiceStrategy.getFallbackImage(requirement.getPosition());
                 method = ImageMethodEnum.PICSUM;
-                log.warn("智能体5 ： Pexels API 检索图片失败，使用降级策略，position = {}", requirement.getPosition());
+                log.warn("智能体5 ：图片获取失败，使用降级方案，position = {}, originalSource = {}", requirement.getPosition(), imageSource);
             }
 
             // 使用图片直接 URL （ MVP 阶段不上传到 COS，简化流程）
@@ -216,7 +222,7 @@ public class ArticleAgentServiceImpl implements ArticleAgentService {
             // 推送单张配图完成
             String imageCompleteMessage = SseMessageTypeEnum.IMAGE_COMPLETE.getStreamingPrefix() + GsonUtils.toJson(imageResult);
             streamHandler.accept(imageCompleteMessage);
-            log.info("智能体5 : 配图检索成功，position = {}, method = {}", requirement.getPosition(), method.getValue());
+            log.info("智能体5 : 配图获取成功，position = {}, method = {}", requirement.getPosition(), method.getValue());
         }
         // 将解析出的图片列表对象保存到 ArticleState 中，供后续智能体使用
         state.setImages(imageResults);
